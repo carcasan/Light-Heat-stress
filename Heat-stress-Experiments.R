@@ -28,32 +28,12 @@ library(gridExtra)
 library(stringr)
 library(patchwork)
 
-
-
-mywd="C:/Users/ccastros/OneDrive - Australian Institute of Marine Science/Documents/2023/Light/RCode-Github"
-
 options(mc.cores = parallel::detectCores())##optimise model run
+
+
+##Load Data
+mywd="C:/Users/ccastros/OneDrive - Australian Institute of Marine Science/Documents/2023/Light/RCode-Github"
 load(paste(mywd,"/Experiments_Tables.R", sep=("")))
-
-
-#plot response per treatment
-w1<-Winterdata%>%group_by(Site,Tank,Treatment)%>%summarise(FvFm=mean(FvFm))%>%
-  ggplot(aes(x=Treatment, y=FvFm, fill=Treatment))+
-  ylab("Photosynthetic efficiency\n (Fv/Fm)")+scale_x_discrete(labels=c('LC', 'LH', 'HC', 'HH'))+xlab("")+
-  geom_rect(ymin = 0.68, ymax = 0.8, 
-             xmin = -Inf, xmax = Inf, fill = "#FFFDE5", alpha=0.04) +
-  geom_rect(ymin = -0.1, ymax = 0.68, 
-            xmin = -Inf, xmax = Inf, fill = c("#FACDBB"), alpha=0.04) +
-  geom_boxplot()+scale_fill_discrete_sequential(palette="Heat2")+
-  facet_wrap(~Site)+
-  theme(legend.position = "none",legend.key.size = unit(0.2,"cm"),text = element_text(size=10))
-
-
-w1a<-w1+#ggtitle("Winter")+
-  geom_point(data=Winterdata%>%group_by(Site,Tank,Genotype,Treatment)%>%
-                summarise(FvFm=mean(FvFm)), aes(x=Treatment, y=FvFm, fill=Treatment), alpha=0.2, size=0.3)+
-  geom_jitter(alpha=0.1, size=0.3)+
-  ylim(c(0.0, 0.75))
 
 
 ##***************************************************
@@ -84,27 +64,12 @@ mwnd2 <- brms::posterior_epred(##already in response scale
   t() %>%
   cbind(nd, .)# 
 
-
-mwinnd<-mwnd2%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Treatment)%>%left_join(unique(mwnd2[c(2:4)]))%>%droplevels()%>%
-  ggplot(aes(y = Treatment, x = effect,color=Treatment,fill=Treatment)) + 
-  ylab("Light treatment")+
-  geom_point(data=Winterdata%>%group_by(Site,Tank,Genotype,Treatment,Light,Temp)%>%
-  summarise(FvFm=mean(FvFm)), aes(y=Light, x=FvFm, fill=Treatment, colour=Treatment), alpha=0.3, size=0.7)+
-  ggdist::stat_halfeye(aes(y = Light, x = effect, group=Site),color="grey",.width = c(0.8, 0.95), 
-                       point_interval = "median_hdi",alpha=0.6,size=0.1)+
-  facet_grid(vars(Temp),scales = "free")+xlab("Posterior FvFm")+
-  scale_color_manual(values = mycolors)+scale_fill_manual(values = mycolors)+
-  scale_x_continuous(trans="logit", limits = c(0.1, 0.75))+
-  theme_bw()+
-  theme(legend.position = "bottom",legend.title = element_blank(),legend.key.size = unit(0.4, 'cm'),
-        legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8))
-
 mwinnd2<-mwnd2%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
   group_by(Treatment)%>%left_join(unique(mwnd2[c(2:4)]))%>%#droplevels()%>%
   ggplot(aes(y = Treatment, x = effect,color=Treatment,fill=Treatment)) + 
   ylab("Light treatment")+
   geom_point(data=Winterdata%>%group_by(Tank,Genotype,Treatment,Light,Temp)%>%
+  #geom_point(data=Winterdata%>%group_by(Site,Tank,Genotype,Treatment,Light,Temp)%>%
                summarise(FvFm=mean(FvFm)), aes(y=Light, x=FvFm, fill=Treatment, colour=Treatment), alpha=0.3, size=0.7)+
   ggdist::stat_halfeye(aes(y = Light, x = effect, group=Temp),color="grey",.width = c(0.8, 0.95), 
                        point_interval = "median_hdi",alpha=0.6,size=0.1)+
@@ -134,13 +99,11 @@ wcontrasts_sites$model="winter.FvFm"
 Contrasts=rbind(wcontrasts,wcontrasts_sites)
 
 
-#emmeans::contrast(method = "revpairwise") %>%summary(point.est=mean)##otherwise displays median
-
 ##---------------------------------------------------------------------------------
 ##compute posterior distribution of genotype-level response -predicted for new data
 ##---------------------------------------------------------------------------------
 
-##Create New data t
+##Create New data  and Predict
 gen<- Winterdata |>
   dplyr::distinct(Temp, Light, Site, Genotype,Treatment) 
 
@@ -153,63 +116,18 @@ pred_m3b <- brms::posterior_epred(
   cbind(gen, .)
 
 
-
-genwin<-pred_m3b%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Site)%>%left_join(pred_m3b[c(1:5)])%>%
-  ggplot(aes(y = Genotype, x = effect)) + 
-  facet_grid(~Light)+xlab("Posterior FvFm")+
-  ggdist::stat_halfeye(aes(y = Genotype, x = effect,color=Treatment,fill=Treatment),alpha=0.6,size=2)+
-  scale_color_manual(values = mycolors)+
-  scale_fill_manual(values = mycolors)+
-  scale_x_continuous(trans="logit")+
-  theme_bw()+theme(legend.position = "none", title=element_text(vjust = "center"),
-                   legend.title = element_blank(), axis.text.y = element_text(size=6),legend.key.size = unit(0.6, 'cm'),legend.text =element_text(size=8) )
-
-
-genwin=genwin+facet_grid(~Light, labeller=label_both)#+scale_x_continuous(trans="logit", breaks = c(0.3, 0.5, 0.7),limits = c(0.27,0.73))
-    
-
-design <- "
-11333
-22333
-44444
-" 
-wplot<-w1a+mwinnd+genwin+guide_area()+plot_layout(design = design, guides="collect", heights = c(3,3,0.8))+
-  plot_annotation(tag_levels = 'a')##Position common legend at center
-
-
 ##--------------------------------------------------------------------
 ##################-----SUMMER---------################################
 ##--------------------------------------------------------------------
-
-
-#plot response per treatment 
-s1<-Summerdata%>%group_by(Site,Tank,Treatment)%>%summarise(FvFm=mean(FvFm))%>%
-  ggplot(aes(x=Treatment, y=FvFm, fill=Treatment))+
-  ylab("Photosynthetic efficiency\n (Fv/Fm)")+scale_x_discrete(labels=c('LC', 'LH', 'HC', 'HH'))+xlab("")+
-  geom_rect(ymin = 0.63, ymax = 0.8, 
-            xmin = -Inf, xmax = Inf, fill = "#FFFDE5", alpha=0.04) +
-  geom_rect(ymin = -Inf, ymax = 0.63, 
-            xmin = -Inf, xmax = Inf, fill = c("#FACDBB"), alpha=0.04) +
-  geom_boxplot()+scale_fill_discrete_sequential(palette="Heat2")+
-  facet_wrap(~Site)+
-  theme(legend.position = "none",legend.key.size = unit(0.2,"cm"),text = element_text(size=10))
-
-
-s1a<-s1+#ggtitle("Summer")+
-  geom_point(data=Summerdata%>%group_by(Site,Tank,Genotype,Treatment)%>%
-                     summarise(FvFm=mean(FvFm)), aes(x=Treatment, y=FvFm, fill=Treatment), alpha=0.2, size=0.3)+facet_wrap(~Site)+
-  geom_jitter(alpha=0.1, size=0.3)+#scale_y_continuous(expand = c(-0.01, 0.015))
-  ylim(c(0.0, 0.75))
-
-##***************************************************
-## Bayesian Generalised Random-effects Model -- brms
-##***************************************************
 
 ##How many zeros
 Summerdata %>% 
   count(FvFm == 0) %>% 
   mutate(prop = n / sum(n))## 22 (or 3% of the data)
+
+##***************************************************
+## Bayesian Generalised Random-effects Model -- brms
+##***************************************************
 
 model_summer_1b<-brm(bf(FvFm~-1+Treatment+Site+(1|Tank)+(Temp * Light||gr(Genotype, by = Site)), zi~1), data=Summerdata, family = zero_inflated_beta(link = "logit"), warmup = 1000, iter=3000)##is this best?
 ppcheck_sm1<-pp_check(model_summer_1b, type = "dens_overlay", ndraws = NULL)
@@ -217,7 +135,7 @@ ppcheck_sm1<-pp_check(model_summer_1b, type = "dens_overlay", ndraws = NULL)
 brms::prior_summary(model_summer_1b)
 
 
-##Mean nd
+##Predict
 msnd <- brms::posterior_epred(
   model_summer_1b, re_formula = .~ 1,
   newdata = nd#,transform = TRUE
@@ -225,32 +143,17 @@ msnd <- brms::posterior_epred(
   t() %>%
   cbind(nd, .)
 
-##Create New data t
+##Create New data for Genotypes
 gen2<- Summerdata |>
   dplyr::distinct(Temp, Light, Site, Genotype,Treatment) 
 
-msfig<-msnd%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Treatment)%>%left_join(msnd[c(2:4)])%>%
-  ggplot(aes(y = Treatment, x = effect,color=Treatment,fill=Treatment)) + 
-  ylab("Light treatment")+
-  geom_point(data=Summerdata%>%group_by(Site,Tank,Genotype,Treatment,Light,Temp)%>%
-               summarise(FvFm=mean(FvFm)), aes(y=Light, x=FvFm, fill=Treatment, colour=Treatment), 
-             alpha=0.3, size=0.7)+
-  ggdist::stat_halfeye(aes(y = Light, x = effect, group=Site),color="grey",.width = c(0.95), 
-                       point_interval = "median_hdi",alpha=0.6,size=0.1)+
-  facet_grid(vars(Temp), scales = "free")+xlab("Posterior FvFm")+
-  scale_color_manual(values = mycolors)+
-  scale_fill_manual(values = mycolors)+
-  scale_x_continuous(trans="logit", limits = c(0.1, 0.75))+
-  theme_bw()+
-  theme(legend.position = "bottom",legend.title = element_blank(),legend.key.size = unit(0.4, 'cm'),
-        legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8))
 
 msfig2<-msnd%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
   group_by(Treatment)%>%left_join(msnd[c(2:4)])%>%
   ggplot(aes(y = Treatment, x = effect,color=Treatment,fill=Treatment)) + 
   ylab("Light treatment")+
   geom_point(data=Summerdata%>%group_by(Tank,Genotype,Treatment,Light,Temp)%>%
+  #geom_point(data=Summerdata%>%group_by(Site,Tank,Genotype,Treatment,Light,Temp)%>%
                summarise(FvFm=mean(FvFm)), aes(y=Light, x=FvFm, fill=Treatment, colour=Treatment), 
              alpha=0.3, size=0.7)+
   ggdist::stat_halfeye(aes(y = Light, x = effect, group=Temp),color="grey",.width = c(0.95), 
@@ -266,7 +169,6 @@ msfig2<-msnd%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,n
 
 ggarrange(mwinnd2,msfig2+ylab(""), common.legend = T, legend = "bottom",labels = "auto")%>%
  ggsave(filename =paste(myplots, "Experiments/FvFm_Seasons_2.png",sep = "/"), dpi=400, width = 6, height = 3)
-
 
 
 Scontrasts=model_summer_1b %>%
@@ -297,67 +199,45 @@ pred_smod <- brms::posterior_epred(
   cbind(gen2, .)
 
 
-sgplot<-pred_smod%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Site)%>%left_join(pred_smod[c(1:5)])%>%
-  ggplot(aes(y = Genotype, x = effect)) + facet_grid(~Light)+xlab("Average FvFm")+
-  ggdist::stat_halfeye(aes(y = Genotype, x = effect,color=Treatment,fill=Treatment),alpha=0.6,size=2)+
-  scale_color_manual(values = mycolors)+
-  scale_fill_manual(values = mycolors)+ 
-  scale_x_continuous(trans="logit", breaks = c(0.3, 0.5, 0.7),limits = c(0.27,0.73))+
-  theme_bw()+theme(legend.position = "none",
-  legend.title = element_blank(), axis.text.y = element_text(size=6),legend.key.size = unit(0.6, 'cm'),legend.text =element_text(size=8) )
-
-sgplot=sgplot+facet_grid(~Light, labeller=label_both)#+scale_x_continuous(limits=c(0.5,0.75))
-
-
-design <- "
-11333
-22333
-44444
-" 
-
-sumplot<-s1a+msfig+sgplot+guide_area()+
-  plot_layout(design = design, guides="collect", heights = c(3,3,0.8))+
-  plot_annotation(tag_levels = 'a')
-
-
-Fig2V2<-ggarrange(genwin+ggtitle("Winter"), sgplot+ggtitle("Summer")+ylab("")+xlab("Posterior FvFm"))
-ggsave(filename =paste(myplots, "Experiments/Fig_Genotype_Seasons.png",sep = "/"), dpi=400, width = 7, height = 7)
-
-
 
 ###########################
 ##RedChannel Response 
 ###########################
 
+##PLOT  RAW data 
+
+Summerdata$Season="Summer"
+Winterdata$Season="Winter"
+
+alldata= rbind(Summerdata,Winterdata)
+
+alldata$SeasonTemp=paste(alldata$Season,alldata$Temp, sep=".")
+
+ggplot(alldata, aes(y=Light, x=RedChannel*255, fill=SeasonTemp))+
+  geom_density_ridges(rel_min_height = 0.005,scale = 1.2)+
+  scale_fill_discrete_sequential(palette="Heat2", aesthetics = c("color","fill"), alpha=0.9)+#+facet_grid(~Site)
+  xlab("Red Channel intensity")+ylab("Light")+#facet_wrap(~Site)+
+  theme(legend.position = "bottom",text = element_text(size=8))+
+  scale_x_continuous(breaks = c(0,50,100,150,200,250),label = c(0,50,100,150,200,250))
+
+#ggsave(file=paste(myplots,"Experiments/Seasonal_Redchannel.jpeg",sep="/"),width = 5, height = 3.5, units = c("in"),dpi = 300)
+
+##***************************************************
+## Bayesian Generalised Random-effects Model -- brms
+##***************************************************
 
 model_winter_color_1<-brm(RedChannel~-1+Treatment+Site+(1|Tank)+(Temp * Light||gr(Genotype, by = Site)), data=Winterdata, family = Beta(),warmup = 1000, iter=3000)
 mwc_check<-pp_check(model_winter_color_1, ndraws=NULL)
 ##describe priors
 brms::prior_summary(model_winter_color_1)
 
-##Mean nd
+## Predict 
 mwc <- brms::posterior_linpred(
   model_winter_color_1, re_formula = .~ 1,
   newdata = nd,transform = TRUE
 ) |>
   t() %>%
   cbind(nd, .)# 
-
-mwcfig<-mwc%>%dplyr::select(-c(Temp,Light))%>%
-  tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Treatment, group=Site)%>%left_join(mwc[c(2:4)])%>%
-  ggplot(aes(y = Treatment, x = effect*255,color=Treatment,fill=Treatment)) + 
-  ylab("Light treatment")+
-  geom_point(data=Winterdata%>%group_by(Site,Tank,Genotype,Treatment,Light,Temp)%>%
-  summarise(RedChannel=mean(RedChannel)), aes(y=Light, x=RedChannel*255, fill=Treatment, colour=Treatment), alpha=0.3, size=0.9)+
-  ggdist::stat_halfeye(aes(y = Light, x = effect*255),color="grey",.width = c(0.8, 0.95), point_interval = "median_hdi",alpha=0.6,size=2)+
-  facet_grid(vars(Temp),scales="free")+xlab("Posterior \nRed channel intensity")+
-  scale_color_manual(values = mycolors)+
-  scale_fill_manual(values = mycolors)+
-  theme_bw()+
-theme(legend.position = "bottom",legend.title = element_blank(),legend.key.size = unit(0.4, 'cm'),
-      legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8))
 
 
 mwcfig2<-mwc%>%dplyr::select(-c(Temp,Light))%>%
@@ -366,6 +246,7 @@ mwcfig2<-mwc%>%dplyr::select(-c(Temp,Light))%>%
   ggplot(aes(y = Treatment, x = effect*255,color=Treatment,fill=Treatment)) + 
   ylab("Light treatment")+
   geom_point(data=Winterdata%>%group_by(Tank,Genotype,Treatment,Light,Temp)%>%
+  #geom_point(data=Winterdata%>%group_by(Site,Tank,Genotype,Treatment,Light,Temp)%>%
                summarise(RedChannel=mean(RedChannel)), aes(y=Light, x=RedChannel*255, fill=Treatment, colour=Treatment), alpha=0.3, size=0.9)+
   ggdist::stat_halfeye(aes(y = Light, x = effect*255),color="grey",.width = c(0.8, 0.95), point_interval = "median_hdi",alpha=0.6,size=2)+
   facet_grid(vars(Light),scales="free")+xlab("Posterior \nRed channel intensity")+
@@ -375,7 +256,6 @@ mwcfig2<-mwc%>%dplyr::select(-c(Temp,Light))%>%
   theme(legend.position = "bottom",legend.title = element_blank(),legend.key.size = unit(0.4, 'cm'),
         legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8), 
         axis.text.y.left = element_blank(), axis.ticks.y = element_blank())
-
 
 
 mwc_contrasts=model_winter_color_1 %>%
@@ -402,79 +282,6 @@ pred_wrc_mod <- brms::posterior_linpred(
   t() %>%
   cbind(gen, .)
 
-genwc<-pred_wrc_mod%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Site)%>%left_join(pred_wrc_mod[c(1:5)])%>%
-  ggplot(aes(y = Genotype, x = effect*255)) + facet_grid(~Light)+xlab("Red channel intensity")+
-  ggdist::stat_halfeye(aes(y = Genotype, x = effect*255,color=Treatment,fill=Treatment),alpha=0.6,size=2)+
-  scale_color_manual(values = mycolors)+scale_fill_manual(values = mycolors)+
-  theme_bw()+theme(legend.position = "bottom",legend.title = element_blank())
-genwc=genwc+facet_grid(~Light, labeller=label_both)#+scale_x_continuous(limits=c(0.5,0.75))
-
-
-# ggarrange(mwcfig,genwc, labels="auto",common.legend=TRUE)%>%
-# ggsave(file=paste(myplots,"Model/Wintermodcolor_predictions.jpeg",sep="/"),width = 5, height = 4, units = c("in"),dpi = 300)
-
-##----------------------------------------------------------------------------
-##Calculate magnitude of predicted shift and compared with change in FvFm response
-##----------------------------------------------------------------------------
-
-
-wmpreds<-pred_wrc_mod%>%tidyr::pivot_longer(cols=6:8005,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Genotype,Treatment)%>%
-  tidybayes::mean_qi(Genotype_mean = effect*255)#, .width = c(.95, .66)) 
-
-
-wc<-wintercolor%>%ggplot(aes(x=Change, y=forcats::fct_reorder(Genotype,Change), fill=Treatment))+
-  xlab("Relative Change in Color\n (Posterior mean)")+ylab("Genotype")+
-  geom_point(aes(colour=Treatment),size=1.5, position=position_dodge(width = 0.3))+
-  scale_color_manual(values=c("#FADD3C", "#F5970A"))+
-  #geom_segment(aes(x=0, xend=Change, y=Genotype, yend=Genotype,colour=Treatment))+
-  geom_linerange(aes(xmin=0, xmax=Change, y=Genotype, yend=Genotype,colour=Treatment),position=position_dodge(width = 0.3))+
-  theme_bw()+scale_y_discrete(labels = function(x) {
-    colours <- rep(c("#C75050","#C75050","#3E45A8","#3E45A8","#3E45A8","#CC6666",
-                              "#3E45A8","#C75050","#3E45A8","#C75050","#C75050","#C75050","#3E45A8",
-                              "#3E45A8","#3E45A8","#3E45A8","#C75050","#C75050","#C75050","#C75050")) 
-                              glue::glue("<span style='color:{colours}'>{x}</span>")
-  }) +
-  theme(axis.text.y = ggtext::element_markdown())+
-  theme(legend.position = "bottom", legend.title = element_blank(),text = element_text(size=8))
-
-
-wmpreds_fvfm=pred_m3b%>%dplyr::select(-c(Temp,Light))%>%
-  tidyr::pivot_longer(cols=4:8003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Genotype,Treatment)%>%
-  tidybayes::mean_qi(Genotype_mean = effect)
-
-winfvfm<-wmpreds_fvfm%>%select(Genotype, Treatment, Genotype_mean)%>%spread(Treatment,Genotype_mean)%>%
-  mutate(`Low light`=((Low.Heated-Low.Control)/Low.Control))%>%
-  mutate(`High light`=((High.Heated-High.Control)/High.Control))%>%select(Genotype,`Low light`,`High light`)%>%
-  gather(key="Treatment",value="Change",`Low light`,`High light`)%>%droplevels()
-
-##Order treatment levels
-winfvfm$Treatment<-factor(winfvfm$Treatment,levels=c("Low light","High light"))
-
-wp<-winfvfm%>%ggplot(aes(x=Change, y=forcats::fct_reorder(Genotype,wintercolor$Change), fill=Treatment))+
-  xlab("Relative Change in FvFm \n(Posterior mean)")+ylab("")+
-  geom_point(aes(colour=Treatment),size=2, position=position_dodge(width = 0.3))+
-  scale_color_manual(values=c("#FADD3C", "#F5970A"))+
-  geom_linerange(aes(xmin=0, xmax=Change, y=Genotype, yend=Genotype,colour=Treatment),position=position_dodge(width = 0.3))+
-  theme_bw()+scale_y_discrete(labels = function(x) {
-    colours <- rep(c("#C75050","#C75050","#3E45A8","#3E45A8","#3E45A8","#CC6666",
-                              "#3E45A8","#C75050","#3E45A8","#C75050","#C75050","#C75050","#3E45A8",
-                              "#3E45A8","#3E45A8","#3E45A8","#C75050","#C75050","#C75050","#C75050")) 
-                              glue::glue("<span style='color:{colours}'>{x}</span>")
-  }) +
-  theme(axis.text.y = ggtext::element_markdown())+
-  theme(legend.position = "bottom", legend.title = element_blank(),text = element_text(size=8))+
-  geom_text(x=-0.04, y="G17", label="Bundegi", color="#C75050", size=3)+
-  geom_text(x=-0.04, y="G16", label="Tantabiddi", color="#3E45A8", size=3)
-
-# ggarrange(wp, wc+ylab("")+theme(axis.text.y = element_blank()), common.legend = T, legend = "bottom",labels = "auto", align = "hv")%>%
-#   ggsave(file=paste(myplots,"Model/SFig5.jpeg",sep="/"),width = 4, height = 5, units = c("in"),dpi = 300)
-
-winfvfm%<>%left_join(unique(gen[c(3,4)]))
-tapply(winfvfm$Change, winfvfm$Treatment, mean)
-tapply(winfvfm$Change, winfvfm$Site, mean)
 
 ########### SUMMER DATA###################
 
@@ -485,34 +292,13 @@ msccheck<-pp_check(model_summer_color_1, ndraws = NULL)##OK
 brms::prior_summary(model_summer_color_1)
 
 
-ggarrange(ppcheck_wm1,ppcheck_sm1,mwc_check,msccheck, labels = "auto")%>%
-  ggsave(file=paste(myplots,"/Model/Modelfit.jpg", sep=""),width = 5.3, height = 6, units = c("in"),dpi = 300)
-
-##Mean nd
+##Predict
 csmod <- brms::posterior_linpred(
   model_summer_color_1, re_formula = .~ 1,
   newdata = nd,transform = TRUE
 ) |>
   t() %>%
   cbind(nd, .)# 
-
-
-
-mcsfig<-csmod%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Treatment)%>%left_join(csmod[c(2:4)])%>%
-  ggplot(aes(y = Light, x = effect*255,color=Treatment,fill=Treatment)) +
-  geom_point(data=Summerdata%>%group_by(Site,Tank,Genotype,Treatment,Light,Temp)%>%
-               summarise(RedChannel=mean(RedChannel)), aes(y=Light, x=RedChannel*255, fill=Treatment, colour=Treatment), alpha=0.3, size=0.9)+
-  ggdist::stat_halfeye(aes(y = Light, x = effect*255, group=Site),color="grey",.width = c(0.8, 0.95), point_interval = "median_hdi",alpha=0.6,size=2)+
-  facet_grid(vars(Temp), scales="free")+
-  xlab("Posterior \nRed Channel intensity")+
-  scale_color_manual(values = mycolors)+ylab("Treatment")+
-  scale_fill_manual(values = mycolors)+
-  #scale_x_continuous(trans="logit")+
-  theme_bw()+
-  theme(legend.position = "bottom",legend.title = element_blank(),legend.key.size = unit(0.4, 'cm'),
-        legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8))
-
 
 
 mcsfig2<-csmod%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
@@ -530,8 +316,7 @@ theme(legend.position = "bottom",legend.title = element_blank(),legend.key.size 
       legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8), 
       axis.text.y.left = element_blank(), axis.ticks.y = element_blank())
 
-# ggarrange(mwcfig,mcsfig+ylab(""), common.legend = T, legend = "bottom",labels = "auto", align = "hv")%>%
-#   ggsave(filename =paste(myplots, "Experiments/Pop_Color.png",sep = "/"), dpi=400, width = 6, height = 3)
+##--PLOT
  ggarrange(mwcfig2,mcsfig2+ylab(""), common.legend = T, legend = "bottom",labels = "auto", align = "hv")%>%
    ggsave(filename =paste(myplots, "Experiments/Pop_Color2.png",sep = "/"), dpi=400, width = 6, height = 3)
 
@@ -554,7 +339,13 @@ Contrasts%<>%rbind(SC_contrasts,SC_contrasts_site)
 
 write.table(Contrasts, file=paste(mywd,"/Contrasts_table.csv", sep=""), sep=",",quote=FALSE, row.names=T, col.names=T)
 
+##Plot Model fit for all
+ggarrange(ppcheck_wm1,ppcheck_sm1,mwc_check,msccheck, labels = "auto")%>%
+  ggsave(file=paste(myplots,"/Model/Modelfit.jpg", sep=""),width = 5.3, height = 6, units = c("in"),dpi = 300)
+
+##------------------------------------------------------------------------------
 ##compute posterior draws of genotype-level effects predicted for new data
+##------------------------------------------------------------------------------
 pred_src_mod <- brms::posterior_linpred(
   model_summer_color_1, re_formula = .~ 1 + (Temp * Light||gr(Genotype, by = Site)),
   newdata = gen2,transform = TRUE
@@ -563,48 +354,21 @@ pred_src_mod <- brms::posterior_linpred(
   cbind(gen2, .)
 
 
-scmplot<-pred_src_mod%>%dplyr::select(-c(Temp,Light))%>%
-  tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
-  group_by(Site)%>%left_join(pred_src_mod[c(1:5)])%>%
-  ggplot(aes(y = Genotype, x = effect*255)) + facet_grid(~Light)+
-  xlab("Red channel intensity")+
-  ggdist::stat_halfeye(aes(y = Genotype, x = effect*255,color=Treatment,fill=Treatment),alpha=0.6,size=2)+
-  scale_color_manual(values = mycolors)+scale_fill_manual(values = mycolors)+
-  theme_bw()+theme(legend.position = "bottom",legend.title = element_blank())
-
-ggsave(file=paste(myplots,"Model/grouplevel_summermod_color_predictions2.jpeg",sep="/"),width = 5.3, height = 6, units = c("in"),dpi = 300)
-
-##--------------------------------------
-##PLOT  RAW data both SEASONS TOGETHER
-##--------------------------------------
-Summerdata$Season="Summer"
-Winterdata$Season="Winter"
-
-alldata= rbind(Summerdata,Winterdata)
-
-
-alldata$SeasonTemp=paste(alldata$Season,alldata$Temp, sep=".")
-
-ggplot(alldata, aes(y=Light, x=RedChannel*255, fill=SeasonTemp))+
-  geom_density_ridges(rel_min_height = 0.005,scale = 1.2)+
-  scale_fill_discrete_sequential(palette="Heat2", aesthetics = c("color","fill"), alpha=0.9)+#+facet_grid(~Site)
-  xlab("Red Channel intensity")+ylab("Light")+#facet_wrap(~Site)+
-  theme(legend.position = "bottom",text = element_text(size=8))+
-  scale_x_continuous(breaks = c(0,50,100,150,200,250),label = c(0,50,100,150,200,250))
-
-#ggsave(file=paste(myplots,"Experiments/Seasonal_Redchannel.jpeg",sep="/"),width = 5, height = 3.5, units = c("in"),dpi = 300)
-
-
 ##----------------------------------------------------------------------------
 ##Calculate magnitude of predicted shift and compared with change in FvFm response
 ##----------------------------------------------------------------------------
-
 
 meanpreds<-pred_src_mod%>%tidyr::pivot_longer(cols=6:4005,names_to = "Iteration", values_to = "effect")%>%
 group_by(Genotype,Treatment)%>%
 tidybayes::mean_qi(Genotype_mean = effect*255)#, .width = c(.95, .66)) 
 
+##Relative Change in Color
+summercolor<-meanpreds%>%select(Genotype, Treatment, Genotype_mean)%>%spread(Treatment,Genotype_mean)%>%
+  mutate(`Low light`=((Low.Heated-Low.Control)/Low.Control))%>%
+  mutate(`High light`=((High.Heated-High.Control)/High.Control))%>%select(Genotype,`Low light`,`High light`)%>%
+  gather(key="Treatment",value="Change",`Low light`,`High light`)%>%droplevels()
 
+##Order Relative Change in Color
 descolor<-summercolor%>%arrange(Change)%>%filter(Treatment=="High light")%>%select(color)
 descolor=descolor$color
 ##Fix G2/G20
@@ -629,6 +393,7 @@ meanpreds_fvfm=pred_smod%>%dplyr::select(-c(Temp,Light))%>%
   group_by(Genotype,Treatment)%>%
   tidybayes::mean_qi(Genotype_mean = effect)
 
+# Relative Change 
 summerfvfm<-meanpreds_fvfm%>%select(Genotype, Treatment, Genotype_mean)%>%spread(Treatment,Genotype_mean)%>%
   mutate(`Low light`=((Low.Heated-Low.Control)/Low.Control))%>%
   mutate(`High light`=((High.Heated-High.Control)/High.Control))%>%select(Genotype,`Low light`,`High light`)%>%
@@ -655,11 +420,4 @@ sp<-summerfvfm%>%ggplot(aes(x=Change, y=forcats::fct_reorder(Genotype,summercolo
 ggarrange(sp,sc+ylab("")+theme(axis.text.y = element_blank()), common.legend = T, legend = "bottom",labels = "auto", align = "hv")%>%
  ggsave(filename =paste(myplots, "Model/Figure5.png",sep = "/"), dpi=400, width = 4, height = 5)
 
-
-summerfvfm%<>%left_join(unique(gen2[c(3,4)]))
-tapply(summerfvfm$Change, summerfvfm$Site, mean)
-tapply(summerfvfm$Change, summerfvfm$Treatment, mean)
-tapply(summerfvfm$Change, summerfvfm$Treatment, range)
-
-#save(Summerdata, Winterdata, summercolor,summerfvfm,wintercolor,winfvfm,checkdiff, file="Experiments_Tables.R")
-
+#save(Summerdata, Winterdata, summercolor,summerfvfm,wintercolor,winfvfm,file="Experiments_Tables.R")
