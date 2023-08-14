@@ -56,7 +56,7 @@ mycolors=rep(c("#EBF0AF", "#E0B336","#F08622", "#D11450"),2)## in order of treat
 nd <- Winterdata |>
   dplyr::distinct(Site,Temp, Light, Treatment)
 
-##Mean nd
+##Predict
 mwnd2 <- brms::posterior_epred(##already in response scale
   model_winter_3f, re_formula = .~ 1,##same as re_formula = NA,
   newdata = nd
@@ -82,6 +82,9 @@ mwinnd2<-mwnd2%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003
         legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8), 
         axis.text.y.left = element_blank(), axis.ticks.y = element_blank())
 
+##-------------------
+##Estimate contrasts
+##-------------------
 wcontrasts=model_winter_3f %>%
   emmeans::emmeans(~ Treatment)%>%
   emmeans::regrid(transform="log")%>%## give percentage change response
@@ -170,7 +173,9 @@ msfig2<-msnd%>%dplyr::select(-c(Temp,Light))%>%tidyr::pivot_longer(cols=4:4003,n
 ggarrange(mwinnd2,msfig2+ylab(""), common.legend = T, legend = "bottom",labels = "auto")%>%
  ggsave(filename =paste(myplots, "Experiments/FvFm_Seasons_2.png",sep = "/"), dpi=400, width = 6, height = 3)
 
-
+##-------------------
+##Estimate contrasts
+##-------------------
 Scontrasts=model_summer_1b %>%
   emmeans::emmeans(~ Treatment)%>%
   emmeans::regrid(transform="log")%>%## give percentage change response
@@ -197,7 +202,6 @@ pred_smod <- brms::posterior_epred(
 ) |>
   t() %>%
   cbind(gen2, .)
-
 
 
 ###########################
@@ -257,7 +261,9 @@ mwcfig2<-mwc%>%dplyr::select(-c(Temp,Light))%>%
         legend.text =element_text(size=7),text = element_text(size=8), axis.text = element_text(size=8), 
         axis.text.y.left = element_blank(), axis.ticks.y = element_blank())
 
-
+##-------------------
+##Estimate contrasts
+##-------------------
 mwc_contrasts=model_winter_color_1 %>%
   emmeans::emmeans(~ Treatment)%>%
   emmeans::regrid(transform="log")%>%## give percentage change response
@@ -320,7 +326,9 @@ theme(legend.position = "bottom",legend.title = element_blank(),legend.key.size 
  ggarrange(mwcfig2,mcsfig2+ylab(""), common.legend = T, legend = "bottom",labels = "auto", align = "hv")%>%
    ggsave(filename =paste(myplots, "Experiments/Pop_Color2.png",sep = "/"), dpi=400, width = 6, height = 3)
 
-##Contrasts
+##-------------------
+##Estimate contrasts
+##-------------------
 SC_contrasts=model_summer_color_1 %>%
   emmeans::emmeans(~ Treatment)%>%
   emmeans::regrid(transform="log")%>%## give percentage change response
@@ -387,7 +395,7 @@ sc<-summercolor%>%ggplot(aes(x=Change, y=forcats::fct_reorder(Genotype,Change), 
   theme(axis.text.y = ggtext::element_markdown())+
   theme(legend.position = "bottom", legend.title = element_blank(),text = element_text(size=8),legend.text = element_text(size=8))
   
-
+##Predicted FvFm
 meanpreds_fvfm=pred_smod%>%dplyr::select(-c(Temp,Light))%>%
   tidyr::pivot_longer(cols=4:4003,names_to = "Iteration", values_to = "effect")%>%
   group_by(Genotype,Treatment)%>%
