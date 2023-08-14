@@ -1,8 +1,5 @@
 rm(list=ls())
 
-#####################
-##MS9-LPT loggers
-#####################
 
 library(ggplot2);library(tidyr);library(reshape2);library(dplyr); library(mgcv);library(lubridate);library(magrittr);
 library(knitr);library(scales); library(readxl);library(ggpubr)
@@ -36,7 +33,6 @@ p1<-DailyMean%>%
   theme_bw()+xlab("Date")+
   ylab("Daily averaged PAR\n (µmol m\u207B\u00b2 s\u207B\u00b9)")+
 theme(legend.position = "top",text = element_text(size=10))
-
 
 
 #Tides
@@ -127,7 +123,6 @@ wsplot=MS9.preds%>%
   ggarrange(p1,wsplot,p3,p4, ncol=1, common.legend = TRUE, labels = c("a)","b)","c)", "d)"),align = "v")%>%
   ggsave(filename =paste(mywd,myplots, "Fig2_v2.png",sep = "/"), dpi=400,units = c("in"),width = 5,height = 8)
   
-
 
 ##----------------------------------------------
 ##Create light profile for WINTER
@@ -320,75 +315,9 @@ summer_preds=do.call("rbind",summer_preds)
 SLL=sum(summer_preds$DLI[summer_preds$Treatment=='Low light'])## 11
 SHL=sum(summer_preds$DLI[summer_preds$Treatment=='High light'])## 24
 
-##Add time for sampling
-sampling<-data.frame(Time=rep(233002,2),##Time of lights off, back to ambient temp and measure of Fv/Fm
-                     DateTime=rep(as.POSIXct("2022-12-13 23:30:02"),2),
-                     treatment=c('Low light','High light'),       
-                     cPAR=rep(0,2), 
-                     Season="Summer")
-
-predts%<>%rbind(sampling)%>%arrange(DateTime)
-
-##Repeat sequence for plotting
-dayafter<-predts%>%filter(DateTime < as.POSIXct("2022-12-13 12:20:02"))
-dayafter%<>%mutate(DateTime= gsub("-13","-14",DateTime))
-
-dayafter$DateTime=as.POSIXct(dayafter$DateTime)
-predts%<>%rbind(dayafter)
-
-dayafter$Temp=27
-dayafter$Heat="Heated"
-
-
-##Add Temp 
-tempdat=tanks_summer%>%filter(Time %in% c(50002, 91500:133000,163002,185002))%>%droplevels()%>%arrange(DateTime)
-tempdat$Temp[tempdat$Time >=50002 & tempdat$Time < 93000]=27
-tempdat$Temp[tempdat$Time >=123000 & tempdat$Time <= 163002]=34.5
-
-ramping=length(tempdat$Temp[tempdat$DateTime < as.POSIXct("2022-12-14 07:00:00") & tempdat$Time >=93000 & tempdat$Time <123000])
-tempdat$Temp[tempdat$DateTime < as.POSIXct("2022-12-14 07:00:00") & tempdat$Time >=093000 & tempdat$Time < 123000]=seq(from=27, to=34.5, length.out=ramping)
-tempdat$Temp[is.na(tempdat$Temp)==T]=27
-tempdat$Heat="Heated"
-
-
-tempdat%<>%rbind(dayafter) 
-##Create combined graph with two axes 
-ylim.prim <- range(tempdat$cPAR) 
-ylim.sec <- range(tempdat$Temp)#[!is.na(tempdat$temp)])
-
-b <- diff(ylim.prim)/diff(ylim.sec)
-a <- ylim.prim[1] - b*ylim.sec[1] 
-
-graphLabels2 <- data.frame(Season = rep(c("Summer", "Winter"),2),
-                           treatment=c(rep("Low light",2), rep("High light",2)),
-                           Date=rep(as.POSIXct("2022-12-13 09:30:02"),4),
-                           cPAR= rep(34, 4),
-                           ref2 =c("Color","","","")
-                           )
-
-
-ggplot(predts, aes(x=as.POSIXct(DateTime), y=cPAR, group=treatment))+
-  geom_line(size=1, linetype="dashed",aes(group=treatment,color=treatment))+
-  geom_line(data=tempdat,aes(y=a+Temp*b, group=Heat, color=Heat),size=1, linetype="dotted")+
-  geom_hline(aes(yintercept=0, linetype="Control"),color="blue",size=0.2)+
-  scale_y_continuous("PAR (µmol m\u207B\u00b2 s\u207B\u00b9)", sec.axis = sec_axis(~ (. - a)/b, name = "Temperature (\u00b0C)")) +
-  #geom_hline(aes(yintercept = 0), linetype="dotted",size=1)+
-  scale_color_manual(values=mycolors)+
-  scale_x_datetime(date_breaks = "2 hours",date_labels = "%H")+
-  geom_point(data=tanks_winter%>%filter(cPAR==0),aes(x=as.POSIXct("2022-12-13 20:20:02",y =0)), color= "black", size=3)+
-  geom_point(data=tanks_winter%>%filter(cPAR==0),aes(x=as.POSIXct("2022-12-14 09:00:02",y =0)), color= "black", size=3)+
-  geom_text(data=graphLabels2,aes(y=cPAR, x=as.POSIXct(Date),label=ref2),color="black")+
-  geom_text(data=graphLabels2,aes(y=cPAR, x=as.POSIXct(Date),label=ref2),color="black")+
-  xlab("Time (Day hours)")+ggtitle("")+
-  theme_bw()+theme(legend.position = "bottom", text = element_text(size=13), legend.text = element_text(size=12))+
-  scale_linetype_manual(name="", values=c("dashed"))+guides(color = guide_legend(nrow = 2))
-
-ggsave(filename =paste(mywd,myplots, "Summer_tankprofile.png",sep = "/"), dpi=400,units = c("in"),width = 5,height = 4)
-
-
 
 ##-------------------------------------
-##Plot experimental DLI within observed
+##Plot experimental DLI vs observed
 ##-------------------------------------
 
 meanpreds=MS9.preds%>%group_by(Site,Season,factor,Date)%>%summarise(DLI=sum(DLI))
@@ -424,7 +353,6 @@ meanpreds=MS9.preds%>%group_by(Site,Season,factor,Date)%>%summarise(DLI=sum(DLI)
     ggsave(filename =paste(mywd,myplots, "obs_vs_exp_DLI.png",sep = "/"), dpi=400,units = c("in"),width = 5,height = 4)
 
 
- #save(Light,Light_mean,DailyMean,Tempdata,MS9.preds, file="Environmental.RData")
     
     ##--------------------------------------------------------------------------------------
    ##  CHeck DLI on days where daily SST exceeded MMM+1 compared to days without thermal anomalies
@@ -433,21 +361,8 @@ meanpreds=MS9.preds%>%group_by(Site,Season,factor,Date)%>%summarise(DLI=sum(DLI)
     Temp_range$anomaly=0
     Temp_range$anomaly[Temp_range$maxTemp> MMM+1]=1 ##Summer only
     
-    #dhw=Temp_range%>%filter(meanTemp > MMM+1)%>%droplevels()%>%mutate(Date=as.Date(Date))
-#     
-#     dhw.DLI=dhw%>%left_join(meanpreds%>%filter(Date %in% c(dhw$Date)))%>%
-#       filter(!is.na(DLI))%>%group_by(Site, Season)
-# quantile(dhw.DLI$DLI)    
-    
     dhw.DLI=Temp_range%>%mutate(Date=as.Date(Date))%>%left_join(meanpreds)%>%filter(!is.na(DLI))%>%filter(Season=="Summer")
 
     #tapply(dhw.DLI$DLI, dhw.DLI$Season, mean)
     tapply(dhw.DLI$DLI, dhw.DLI$anomaly, quantile)
     
-    ###---------------------------------------------------
-    ##Calculate the average PAR needed to achieve Summer DLI
-    
-    ##Average PAR * 0.043 (i.e. the total number of seconds in a 12h light regime / 1million to convert to mol)
-    
-  ##  eg. 
-  ##  300*0.043= 12.9
