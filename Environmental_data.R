@@ -57,6 +57,71 @@ seasonalref=Light_mean%>%select(Site,Season,DateTime,MM)%>%filter(!Season=="Spri
 seasonalref$MM[seasonalref$Season=="Summer"]=summerMM
 seasonalref$MM[seasonalref$Season=="Winter"]=WinterMM
 seasonalref$Season=factor(seasonalref$Season, levels = c("Winter","Summer"))
+##--------------------------------------
+##predict daily PAR curves 
+##--------------------------------------
+
+
+#daily predictions per second
+daily_preds=list()
+
+site=unique(Light_mean$Site)
+
+for (i in 1:length(site)){
+  d_data=Light%>%filter(Site %in% c(site[i]))%>%droplevels()
+  date=unique(d_data$Date)
+  for (d in 1:length(date)){
+    
+    D=d_data%>%filter(Date==date[d])%>%select("calcPAR","Time","DateTime")%>%droplevels()
+    Dmodel<-gam(calcPAR~s(Time), data=D)
+    timesequence=seq(from=D$DateTime[1], to=D$DateTime[length(D$DateTime)], by="sec")
+    timeseq=format(as.POSIXct(timesequence), format = "%H%M%S") 
+    
+    D_newd=data.frame("Time"=as.numeric(timeseq),"DateTime"=timesequence)
+    pred_PAR<-predict.gam(Dmodel,D_newd)
+    D_newd$PAR=pred_PAR
+    
+    ##---------------
+    ##Convert to DLI
+    ##---------------
+    
+    #SUM instantaneous PAR over 12h period  (i.e. predicted PAR umol.m2.s)/ 1million to convert to mol
+    D_newd$PAR[D_newd$PAR<0]=0## no negative PAR values or remove 
+    D_newd$DLI=D_newd$PAR/1000000 ##convert to mol
+    D_newd$Date=date[d]
+    D_newd$Site=site[i]
+    
+    daily_preds=c(daily_preds,list(D_newd))
+  }
+}
+
+MS9.preds=do.call("rbind",daily_preds)
+rm(D, Dmodel,d_data,date,timesequence,timeseq,D_newd,pred_PAR,daily_preds)
+
+##
+MS9.preds$Month=months(MS9.preds$DateTime)
+MS9.preds$Season[MS9.preds$Month=="June"|MS9.preds$Month=="July"|MS9.preds$Month=="August"]<-"Winter"
+MS9.preds$Season[MS9.preds$Month=="September"|MS9.preds$Month=="October"|MS9.preds$Month=="November"]<-"Spring"##Incomplete. Leave out for now
+MS9.preds$Season[MS9.preds$Month=="December"|MS9.preds$Month=="January"|MS9.preds$Month=="February"]<-"Summer"
+MS9.preds$Season=factor(MS9.preds$Season, levels = c("Winter","Summer","Spring"))
+
+#Extract time and add identical date for plotting 
+MS9.preds$time=strftime(MS9.preds$DateTime, format="%H:%M:%S")
+MS9.preds$time=as.POSIXct(MS9.preds$time, format="%H:%M:%S")
+
+y_lab=("Daily PAR cycle\n (µmol m\u207B\u00b2 s\u207B\u00b9)")
+
+wsplot=MS9.preds%>%
+  filter(!Season == "Spring" & PAR>0)%>%
+  ggplot(aes(x=time,y=PAR,colour=Site))+
+  facet_wrap(vars(Season))+
+  ylim(c(0,1500))+geom_smooth()+
+  scale_color_manual(values = sitecolor)+
+  stat_summary(fun="min", geom="line",linetype="dotted")+
+  stat_summary(fun="max", geom="line", linetype="dotted")+
+  theme_bw()+labs(x="Time (hours)", y=y_lab)+
+  theme(legend.position = "top",text = element_text(size=10))
+
 
 
 ##----------------------------------------
@@ -92,33 +157,9 @@ p4<-Temp_range%>%filter(!Season == "Spring")%>%
   theme_bw()+xlab("Date")+ylab("Daily temperature\n range (C\u00b0)")+
   theme(legend.position = "top",text = element_text(size=10))
 
-
-##--------------------------------------
-##predict daily PAR curves 
-##--------------------------------------
-
-
-seasoncolors=c("#F07613E0", "#1194D6")
-scolbands=c("#FCDDDD","#EEEAF7")
-dli_plots=list()
-
-
-y_lab=("Daily PAR cycle\n (µmol m\u207B\u00b2 s\u207B\u00b9)")
-
-
-wsplot=MS9.preds%>%
-  filter(!Season == "Spring" & PAR>0)%>%
-  ggplot(aes(x=time,y=PAR,colour=Site))+
-  facet_wrap(vars(Season))+
-  ylim(c(0,1500))+geom_smooth()+
-  scale_color_manual(values = sitecolor)+
-  stat_summary(fun="min", geom="line",linetype="dotted")+
-  stat_summary(fun="max", geom="line", linetype="dotted")+
-  theme_bw()+labs(x="Time (hours)", y=y_lab)+
-  theme(legend.position = "top",text = element_text(size=10))
-
-
+##-----------------------------
 ##Create Figure with all panels
+##-----------------------------
     
   ggarrange(p1,wsplot,p3,p4, ncol=1, common.legend = TRUE, labels = c("a)","b)","c)", "d)"),align = "v")%>%
   ggsave(filename =paste(mywd,myplots, "Fig2_v2.png",sep = "/"), dpi=400,units = c("in"),width = 5,height = 8)
