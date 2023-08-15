@@ -14,7 +14,6 @@ load(paste(mywd,"/RCode-Github/Environmental.RData", sep=""))
 
 
 sitecolor=c("#CC6666", "#9999CC")
-ylab<-"PAR (mol photons m\u207B\u00b2 s\u207B\u00b9)"
 se <- function(x) sd(x) / sqrt(length(x))
  
 ##------------------
@@ -57,10 +56,10 @@ seasonalref=Light_mean%>%select(Site,Season,DateTime,MM)%>%filter(!Season=="Spri
 seasonalref$MM[seasonalref$Season=="Summer"]=summerMM
 seasonalref$MM[seasonalref$Season=="Winter"]=WinterMM
 seasonalref$Season=factor(seasonalref$Season, levels = c("Winter","Summer"))
+
 ##--------------------------------------
 ##predict daily PAR curves 
 ##--------------------------------------
-
 
 #daily predictions per second
 daily_preds=list()
@@ -121,7 +120,6 @@ wsplot=MS9.preds%>%
   stat_summary(fun="max", geom="line", linetype="dotted")+
   theme_bw()+labs(x="Time (hours)", y=y_lab)+
   theme(legend.position = "top",text = element_text(size=10))
-
 
 
 ##----------------------------------------
